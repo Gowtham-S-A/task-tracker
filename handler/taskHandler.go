@@ -1,4 +1,4 @@
-package main
+package handler
 
 import (
 	"encoding/json"
@@ -10,14 +10,22 @@ import (
 	"time"
 )
 
-func createTask(description string) bool {
+const (
+	TaskStatusToDo       = "toDo"
+	TaskStatusInProgress = "inProgress"
+	TaskStatusDone       = "done"
+	TaskDescription      = "description"
+	SubDir               = "taskList"
+)
+
+func CreateTask(description string) bool {
 	var task model.Task
 	timeNow := time.Now().Format(time.RFC3339)
 	id := uuid.NewV4().String()
 
 	task.Id = id
 	task.Description = description
-	task.Status = "toDo"
+	task.Status = TaskStatusToDo
 	task.CreatedAt = timeNow
 	task.UpdatedAt = timeNow
 
@@ -43,7 +51,7 @@ func createTask(description string) bool {
 	return true
 }
 
-func updateTask(Id string, Description string, Type string) bool {
+func UpdateTask(Id string, Description string, Type string) bool {
 	timeNow := time.Now().Format(time.RFC3339)
 	fileName := filepath.Join(SubDir, Id+".json")
 	jsonData, err := os.ReadFile(fileName)
@@ -58,16 +66,14 @@ func updateTask(Id string, Description string, Type string) bool {
 		return false
 	}
 	switch Type {
-	case "description":
+	case TaskDescription:
 		task.Description = Description
-		task.UpdatedAt = timeNow
-	case "inProgress":
-		task.Status = "inProgress"
-		task.UpdatedAt = timeNow
-	case "done":
-		task.Status = "done"
-		task.UpdatedAt = timeNow
+	case TaskStatusInProgress:
+		task.Status = TaskStatusInProgress
+	case TaskStatusDone:
+		task.Status = TaskStatusDone
 	}
+	task.UpdatedAt = timeNow
 	jsonData, err = json.Marshal(task)
 	if err != nil {
 		fmt.Println("Error marshalling task ===> ", err)
@@ -81,7 +87,7 @@ func updateTask(Id string, Description string, Type string) bool {
 	return true
 }
 
-func deleteTask(Id string) bool {
+func DeleteTask(Id string) bool {
 	fileName := filepath.Join(SubDir, Id+".json")
 	err := os.Remove(fileName)
 	if err != nil {
@@ -91,36 +97,35 @@ func deleteTask(Id string) bool {
 	return true
 }
 
-func getTask(status string) {
+func GetTask(status string) error {
 	files, err := os.ReadDir(SubDir)
 	if err != nil {
 		fmt.Println("Error reading dir ===> ", err)
+		return err
 	}
+	fmt.Printf("<========== List of %s tasks ==========>\n", status)
 	for _, file := range files {
+		match := false
 		fileName := filepath.Join(SubDir, file.Name())
 		fileData, err := os.ReadFile(fileName)
 		if err != nil {
 			fmt.Println("Error reading task ===> ", err)
+			return err
 		}
-		match := checkTaskStatus(fileData, status)
+		var task model.Task
+		err = json.Unmarshal(fileData, &task)
+		if err != nil {
+			fmt.Println("Error unmarshalling task ===> ", err)
+			return err
+		}
+		if task.Status == status {
+			match = true
+		} else if status == "" {
+			match = true
+		}
 		if match {
 			fmt.Println(string(fileData))
 		}
 	}
-}
-
-func checkTaskStatus(file []byte, status string) bool {
-	var task model.Task
-	err := json.Unmarshal(file, &task)
-	if err != nil {
-		fmt.Println("Error unmarshalling task ===> ", err)
-		return false
-	}
-	if task.Status == status {
-		return true
-	} else if status == "" {
-		return true
-	} else {
-		return false
-	}
+	return nil
 }
